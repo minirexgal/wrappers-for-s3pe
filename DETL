@@ -1,0 +1,220 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using s3pi.Interfaces;
+using System.IO;
+
+namespace Kuree.Sims3.DETL
+{
+    /// <summary>
+    /// DETL Resource Wrapper For Sims3 Made by Kuree
+    /// </summary>
+    public class DETLWrapper : AResource 
+    {
+        const Int32 recommendedApiVersion = 1;
+
+        #region AApiVersionedFields
+        /// <summary>
+        /// Return the version number that this wrapper prefers to be called with (the default if passed zero).
+        /// </summary>
+        /// <remarks>This wrapper returns <c>1</c> and is not sensitive to API version.</remarks>
+        public override int RecommendedApiVersion { get { return recommendedApiVersion; } }
+        #endregion
+
+        #region Attributes
+        private UInt16 m_Version;
+        public string m_Name;
+        private EntryList m_entryList;
+        private Int32 m_StringCount;
+        private Int32 m_entryCount;
+        
+        [ElementPriority(0)]
+        public UInt16 Version { get { return m_Version; } set { m_Version = value; } }
+        public Int32 StringCount { get { return m_StringCount; } }
+        public Int32 EntryCount { get { return m_entryCount; } }
+        [ElementPriority(2)]
+        public EntryList entryList { get { return m_entryList; } set { m_entryList = value; } }
+        [ElementPriority(1)]
+        public string Name { get { return m_Name; } set { m_Name = value; m_StringCount = (Int32)value.Length; } }
+        public string Value { get { return ValueBuilder; } }
+
+        #endregion
+
+        #region Data I/O
+        private void Parse(Stream s)
+        {
+            BinaryReader r = new BinaryReader(s);
+            m_Version = r.ReadUInt16();
+            m_StringCount = r.ReadInt32();
+
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < m_StringCount; i++)
+            {
+                b.Append( (char)r.ReadUInt16());
+            }
+
+
+            m_Name = b.ToString();
+            m_entryCount = r.ReadInt32();
+            m_entryList = new EntryList(OnResourceChanged);
+
+            for (int i = 0; i < m_entryCount; i++)
+            {
+                m_entryList.Add(new Entry(1, OnResourceChanged, s));
+            }
+        }
+
+        
+
+        protected  override Stream UnParse()    
+        {
+            MemoryStream s = new MemoryStream();
+            BinaryWriter w = new BinaryWriter(s);
+
+            w.Write(m_Version);
+            w.Write(m_Name.Length);
+            foreach (char c in m_Name.ToCharArray())
+            {
+                w.Write((UInt16)c);
+            }
+            
+            w.Write(m_entryList.Count);
+
+            foreach (Entry entry in m_entryList)
+            {
+                entry.UnParse(s);
+            }
+
+            return s;
+
+        }
+
+
+        
+
+        #endregion
+
+        public DETLWrapper(int APIversion, Stream s) : base(APIversion, s) { if (stream == null) { stream = UnParse(); OnResourceChanged(this, new EventArgs()); } else { stream.Position = 0; Parse(s); } }
+        
+        #region Sub-Types
+        public class Entry : AHandlerElement, IEquatable<Entry>
+        {
+            #region Attributes
+            private ulong m_Guid;
+            private UInt32 m_Content;
+            public ulong Guid { get { return m_Guid; } set { m_Guid = value; } }
+            public UInt32 Content { get { return m_Content; } set { m_Content = value; } }
+            #endregion
+
+            //Constructor
+
+            public Entry(int APIversion, EventHandler handler, Stream s) : base(APIversion, handler)
+            {
+                Parse(s);
+            }
+
+            public override List<string> ContentFields
+            {
+                get { return GetContentFields(requestedApiVersion, this.GetType()); }
+            }
+
+            public Entry(int APIversion, EventHandler handler, Entry entry)
+                : base(APIversion, handler)
+            {
+                m_Guid = entry.m_Guid;
+                m_Content = entry.m_Content;
+                
+            }
+
+            #region Data I/O
+            private void Parse(Stream s)
+            {
+                BinaryReader r = new BinaryReader(s);
+                m_Guid = (ulong)r.ReadUInt64();
+                m_Content = r.ReadUInt32();
+            }
+
+            public void UnParse(Stream s)
+            {
+                BinaryWriter w = new BinaryWriter(s);
+                w.Write(m_Guid);
+                w.Write(m_Content);
+
+            }
+            #endregion
+
+            #region IEquatable<Entry>
+            public override AHandlerElement Clone(EventHandler handler)
+            {
+                return new Entry(1, handler, this);
+            }
+
+            public override int RecommendedApiVersion
+            {
+                get { return recommendedApiVersion; }
+            }
+
+
+
+            public  bool Equals(Entry entry)
+            {
+                return (this.m_Content == entry.m_Content ) && (this.m_Guid == entry.m_Guid);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return base.Equals(obj);
+            }
+
+            #endregion
+
+
+            public override int GetHashCode()
+            {
+                return base.GetHashCode();
+            }
+
+            public string Value { get { return ValueBuilder; } }
+
+            
+        }
+
+        public class EntryList : DependentList<Entry>
+        {
+            public EntryList(EventHandler handler) : base(handler) { }
+            public EntryList(EventHandler handler, Stream s) : base(handler, s) { }
+            public EntryList(EventHandler handler, IEnumerable<Entry> lb) : base(handler, lb) { }
+
+            protected override Entry CreateElement(Stream s)
+            {
+                return new Entry(0, elementHandler, s);
+            }
+
+            protected override void WriteElement(Stream s, Entry element)
+            {
+                element.UnParse(s);
+            }
+
+            public override void Add(Entry newElement)
+            {
+                base.Add(newElement);
+            }
+
+            
+
+        }
+
+        #endregion
+
+
+
+        public class DETLWrapperHandler : AResourceHandler
+        {
+            public DETLWrapperHandler()
+            {
+                this.Add(typeof(DETLWrapper), new List<string>(new string[] { "0x03D86EA4" }));
+            }
+        }
+    }
+}
