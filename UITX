@@ -1,0 +1,133 @@
+using s3pi.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+
+namespace Kuree.Sims.UITX
+{
+    /// <summary>
+    /// UITX Resource Wrapper For Sims3 Made by Kuree
+    /// </summary>
+    public class UITXWrapper : AResource
+    {
+        const Int32 recommendedApiVersion = 1;
+
+        #region AApiVersionedFields
+
+        public override int RecommendedApiVersion { get { return recommendedApiVersion; } }
+        #endregion
+
+        #region Attributes
+        private Int32 m_ListCount1;
+        private Int32 m_ListCount2;
+        private TGIList m_tgiList1;
+        private TGIList m_tgiList2;
+
+
+        [ElementPriority(0)]
+        public Int32 ListCount1 { get { return m_ListCount1; } }
+        [ElementPriority(1)]
+        public Int32 ListCount2 { get { return m_ListCount2; } }
+        [ElementPriority(2)]
+        public TGIList TgiList1 { get { return m_tgiList1; } set { m_tgiList1 = value; } }
+        [ElementPriority(3)]
+        public TGIList TgiList2 { get { return m_tgiList2; } set { m_tgiList2 = value; } }
+        public string Value { get { return ValueBuilder; } }
+
+        #endregion
+
+        #region Data I/O
+        private void Parse(Stream s)
+        {
+            BinaryReader r = new BinaryReader(s);
+            m_ListCount1 = r.ReadInt32();
+
+            m_ListCount2 = r.ReadInt32();
+
+            m_tgiList1 = new TGIList(OnResourceChanged);
+            m_tgiList2 = new TGIList(OnResourceChanged);
+
+            for (int i = 0; i < m_ListCount1; i++)
+            {
+                m_tgiList1.Add(new TGIBlock(1, OnResourceChanged, "IGT", s));
+            }
+
+            for (int i = 0; i < m_ListCount2; i++)
+            {
+                m_tgiList2.Add(new TGIBlock(1, OnResourceChanged, "IGT", s));
+            }
+
+        }
+
+
+
+        protected override Stream UnParse()
+        {
+            MemoryStream s = new MemoryStream();
+            BinaryWriter w = new BinaryWriter(s);
+
+            w.Write(m_ListCount1);
+
+
+            w.Write(m_tgiList1.Count);
+
+            foreach (TGIBlock entry in m_tgiList1)
+            {
+                entry.UnParse(s);
+            }
+
+            foreach (TGIBlock entry in m_tgiList2)
+            {
+                entry.UnParse(s);
+            }
+
+            return s;
+
+        }
+
+
+
+
+        #endregion
+
+        public UITXWrapper(int APIversion, Stream s) : base(APIversion, s) { if (stream == null) { stream = UnParse(); OnResourceChanged(this, new EventArgs()); } else { stream.Position = 0; Parse(s); } }
+
+
+        #region Sub-Type
+        public class TGIList : DependentList<TGIBlock>
+        {
+            public TGIList(EventHandler handler) : base(handler) { }
+            public TGIList(EventHandler handler, Stream s) : base(handler, s) { }
+            public TGIList(EventHandler handler, IEnumerable<TGIBlock> lb) : base(handler, lb) { }
+
+            protected override TGIBlock CreateElement(Stream s)
+            {
+                return new TGIBlock(0, elementHandler, "ITG", s);
+            }
+
+            protected override void WriteElement(Stream s, TGIBlock element)
+            {
+                element.UnParse(s);
+            }
+
+            public override void Add(TGIBlock newElement)
+            {
+                base.Add(newElement);
+            }
+
+        }
+        #endregion
+
+
+
+        public class UITXWrapperHandler : AResourceHandler
+        {
+            public UITXWrapperHandler()
+            {
+                this.Add(typeof(UITXWrapper), new List<string>(new string[] { "0x2F7D0008" }));
+            }
+        }
+    }
+}
