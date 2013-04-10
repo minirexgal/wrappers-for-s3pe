@@ -68,10 +68,10 @@ namespace Kuree.Sims.UITX
             MemoryStream s = new MemoryStream();
             BinaryWriter w = new BinaryWriter(s);
 
-            w.Write(m_ListCount1);
-
-
             w.Write(m_tgiList1.Count);
+
+
+            w.Write(m_tgiList2.Count);
 
             foreach (TGIBlock entry in m_tgiList1)
             {
